@@ -21,9 +21,9 @@ function startBotLogic(sock) {
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
         const from = msg.key.remoteJid;
 
-        if (text.toLowerCase() === '.ping') {
-            await sock.sendMessage(from, { text: '🤖 Hello! Your custom multi-client platform is working.' });
-        }
+         if (text.toLowerCase() === '.ping') {
+            await sock.sendMessage(from, { text: '👑 *KING 🤴 BM* is fully operational and online!' });
+               }
     });
 }
 

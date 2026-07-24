@@ -121,6 +121,12 @@ When launching your server instance, configure the following critical environmen
   <span style="font-size:1.2em; color:#00FF00;">Status: <b>🟢 ONLINE</b></span>
 </p>
 
+<!-- Banner Image -->
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/20bd727a-dc6b-4c46-a8d9-d03779e6194c" width="85%" height="auto">
+</p>
+
+
 ---
 
 <!-- Footer -->

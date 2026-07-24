@@ -97,3 +97,31 @@ When launching your server instance, configure the following critical environmen
     <img src="https://img.shields.io/badge/📢_TELEGRAM_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
   </a>
   <br>
+
+## 📊 **Stats**
+
+<p align="center">
+  <img src="https://komarev.com/ghpvc/?username=Bwmxmd254&label=Profile+Views&color=FF0000&style=for-the-badge" alt="Views"/>
+  <img src="https://img.shields.io/github/followers/Bwmxmd254?label=GitHub+Followers&style=for-the-badge&color=00FF00" alt="Followers"/>
+</p>
+
+---
+
+## 🟢 **Status**
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Bwmxmd254/Bwmxmd254/main/assets/statusbar.gif" height="25">
+  <br>
+  <span style="font-size:1.2em; color:#00FF00;">Status: <b>🟢 ONLINE</b></span>
+</p>
+
+---
+
+<!-- Footer -->
+<p align="center">
+  <img src="https://i.imgur.com/dBaSKWF.gif" height="40" width="100%">
+</p>
+
+<p align="center">
+  <strong>BWM XMD PRO © 2026 | Developed by Ibrahim Adams</strong>
+</p>

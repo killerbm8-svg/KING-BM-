@@ -31,6 +31,21 @@ Click the button below to quickly generate your WhatsApp session ID:
   </a>
 </p>
 
+### **Step 3: Choose Hosting Platform**
+Deploy the bot on your preferred platform.
+
+<p align="center">
+   <a href="https://spoiler-bm.onrender.com" target="_blank">
+    <img src="https://img.shields.io/badge/🚀_HEROKU-000000?style=for-the-badge&color=FF00FF" width="200" height="45"/>
+  </a>
+  <a href="https://spoiler-bm.onrender.com" target="_blank">
+    <img src="https://img.shields.io/badge/🚀_RENDER-000000?style=for-the-badge&color=61DAFB" width="200" height="45"/>
+  </a>
+  <a href="https://railway.app?referralCode=AqkNn4" target="_blank">
+    <img src="https://img.shields.io/badge/🚀_RAILWAY-000000?style=for-the-badge&color=purple" width="200" height="45"/>
+  </a>
+</p>
+
 ### **Step 2: Configure Settings**
 Before deployment, configure your bot:
 - **Option A:** Edit `config.env` file

@@ -8,208 +8,161 @@ const app = express();
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// Connect to Neon.tech Database
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
 });
 
-// Automatically create settings table if it doesn't exist
-async function initDatabase() {
-    try {
-        await pool.query(`
-            CREATE TABLE IF NOT EXISTS group_settings (
-                chat_id TEXT PRIMARY KEY,
-                antilink BOOLEAN DEFAULT TRUE,
-                autoviewstatus BOOLEAN DEFAULT TRUE,
-                autoreactstatus BOOLEAN DEFAULT TRUE
-            );
-        `);
-        console.log("Database tables verified successfully.");
-    } catch (err) {
-        console.error("Database initialization failed:", err);
-    }
-}
-initDatabase();
-
-// Helper functions to handle database settings cleanly
-async function getSettings(chatId) {
-    const res = await pool.query('SELECT * FROM group_settings WHERE chat_id = $1', [chatId]);
-    if (res.rows.length === 0) {
-        // Insert default values for a new chat
-        const defaultSettings = await pool.query(
-            'INSERT INTO group_settings (chat_id) VALUES ($1) RETURNING *',
-            [chatId]
+// Setup database tables on startup
+async function setupDatabase() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS bot_users (
+            phone TEXT PRIMARY KEY,
+            antilink_enabled BOOLEAN DEFAULT TRUE,
+            welcome_enabled BOOLEAN DEFAULT TRUE
         );
-        return defaultSettings.rows[0];
-    }
-    return res.rows[0];
+    `);
 }
+setupDatabase().catch(console.error);
 
-async function updateSetting(chatId, column, value) {
-    await pool.query(`UPDATE group_settings SET ${column} = $1 WHERE chat_id = $2`, [value, chatId]);
-}
+function startBotLogic(sock, phone) {
+    // A. GROUP EVENTS: AUTOMATIC WELCOME GREETING
+    sock.ev.on('group-participants.update', async (update) => {
+        if (update.action === 'add') {
+            const from = update.id;
+            
+            // Query database to ensure welcome configuration is active
+            const dbCheck = await pool.query('SELECT welcome_enabled FROM bot_users WHERE phone = $1', [phone]);
+            if (dbCheck.rows[0]?.welcome_enabled === false) return;
 
-function startBotLogic(sock) {
+            for (let participant of update.participants) {
+                const welcomeText = `👋 Hello @${participant.split('@')[0]}!\n\nWelcome to our group! I am *KING 🤴 BM*, the automated group defender. Please follow the rules to avoid being kicked.`;
+                await sock.sendMessage(from, { text: welcomeText, mentions: [participant] });
+            }
+        }
+    });
+
+    // B. MESSAGES DISPATCHER: COMMAND CORES & FILTER CORES
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg || !msg.key) return;
 
         const from = msg.key.remoteJid;
-        const isGroup = from.endsWith('@g.us');
-
-        // 1. STATUS HANDLER (Global / Private Settings)
         if (from === 'status@broadcast') {
-            const settings = await getSettings('status_global');
-            if (settings.autoviewstatus) {
-                await sock.readMessages([msg.key]);
-            }
-            if (settings.autoreactstatus) {
-                await sock.sendMessage(from, { react: { text: '👑', key: msg.key } }, { statusJidList: [msg.key.participant] });
-            }
+            // Auto view and react to status posts
+            await sock.readMessages([msg.key]);
+            await sock.sendMessage(from, { react: { text: '👑', key: msg.key } }, { statusJidList: [msg.key.participant] });
             return;
         }
 
         if (msg.key.fromMe) return;
 
         const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-        
-        // Fetch specific settings for this group or direct chat
-        const currentSettings = await getSettings(from);
+        const isGroup = from.endsWith('@g.us');
 
-        // 2. ANTILINK CHECKER
-        if (isGroup && currentSettings.antilink) {
+        // Fetch custom preference state from database memory
+        const userSettings = await pool.query('SELECT * FROM bot_users WHERE phone = $1', [phone]);
+        const antiLinkActive = userSettings.rows[0]?.antilink_enabled !== false;
+
+        // Group Protection Filter Logic
+        if (isGroup && antiLinkActive) {
             const hasLink = text.includes('://whatsapp.com') || text.includes('http://') || text.includes('https://');
             if (hasLink) {
-                try {
-                    const groupMetadata = await sock.groupMetadata(from);
-                    const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-                    
-                    const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid)?.admin;
-                    const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
+                const groupMetadata = await sock.groupMetadata(from);
+                const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid)?.admin;
+                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
 
-                    if (isBotAdmin && !isSenderAdmin) {
-                        await sock.sendMessage(from, { delete: msg.key });
-                        await sock.sendMessage(from, { 
-                            text: `⚠️ *Links are strictly forbidden!* @${msg.key.participant.split('@')[0]}, you have been removed.`, 
-                            mentions: [msg.key.participant] 
-                        });
-                        await sock.groupParticipantsUpdate(from, [msg.key.participant], 'remove');
-                        return;
-                    }
-                } catch (e) {
-                    console.log("Error processing antilink permissions:", e.message);
+                if (isBotAdmin && !isSenderAdmin) {
+                    await sock.sendMessage(from, { delete: msg.key });
+                    await sock.sendMessage(from, { text: `⚠️ *Links are blocked!* User @${msg.key.participant.split('@')[0]} has been removed.`, mentions: [msg.key.participant] });
+                    await sock.groupParticipantsUpdate(from, [msg.key.participant], 'remove');
+                    return;
                 }
             }
         }
 
-        // 3. COMMAND ENGINE
+        // Processing Runtime Commands
         if (text.startsWith('.')) {
-            const args = text.slice(1).trim().split(/ +/);
-            const command = args.shift().toLowerCase();
+            const parts = text.slice(1).trim().split(' ');
+            const command = parts[0].toLowerCase();
+            const args = parts.slice(1).join(' ');
 
-            // Menu Dashboard
             if (command === 'menu' || command === 'help') {
-                const statusSettings = await getSettings('status_global');
-                const menuText = `👑 *KING 🤴 BM MANAGER* 👑\n\n` +
-                                 `⚙️ *Current Group Settings:*\n` +
-                                 `• Anti-Link Filter: ${currentSettings.antilink ? '✅ ON' : '❌ OFF'}\n` +
-                                 `• Auto Status View: ${statusSettings.autoviewstatus ? '✅ ON' : '❌ OFF'}\n` +
-                                 `• Auto Status React: ${statusSettings.autoreactstatus ? '✅ ON' : '❌ OFF'}\n\n` +
-                                 `🛠️ *Admin Group Controls:*\n` +
-                                 `👉 \`.antilink on\` / \`.antilink off\`\n` +
-                                 `👉 \`.autostatus on\` / \`.autostatus off\`\n\n` +
-                                 `📋 *General Commands:*\n` +
-                                 `👉 \`.ping\` - Server response test.\n` +
-                                 `👉 \`.groupinfo\` - Read group metrics.`;
-                await sock.sendMessage(from, { text: menuText });
-                return;
+                const menu = `👑 *KING 🤴 BM CORE CONTROL* 👑\n\n` +
+                             `⚙️ *Toggles (Use commands to switch):*\n` +
+                             `• Antilink: ${antiLinkActive ? '✅ ON' : '❌ OFF'} (\`.antilink on/off\`)\n` +
+                             `• Welcome Msg: ${userSettings.rows[0]?.welcome_enabled !== false ? '✅ ON' : '❌ OFF'} (\`.welcome on/off\`)\n\n` +
+                             `🛠️ *Commands:*\n` +
+                             `👉 \`.ping\` - Check live platform delay latency.\n` +
+                             `👉 \`.groupinfo\` - Output meta components of current chat.`;
+                await sock.sendMessage(from, { text: menu });
             }
 
             if (command === 'ping') {
-                await sock.sendMessage(from, { text: '👑 *KING 🤴 BM* engine is operational!' });
-                return;
+                await sock.sendMessage(from, { text: '👑 *KING 🤴 BM* is responding with zero lag metrics!' });
             }
 
-            // ADMIN AUTHORIZATION VERIFICATION LOGIC
-            let isAdmin = false;
-            if (isGroup) {
-                try {
-                    const metadata = await sock.groupMetadata(from);
-                    isAdmin = metadata.participants.find(p => p.id === msg.key.participant)?.admin ? true : false;
-                } catch (err) {
-                    isAdmin = false;
-                }
-            } else {
-                isAdmin = true; // Always admin in private messages
-            }
+            // Command to switch configurations dynamically via chat
+            if ((command === 'antilink' || command === 'welcome') && isGroup) {
+                const groupMetadata = await sock.groupMetadata(from);
+                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
+                if (!isSenderAdmin) return await sock.sendMessage(from, { text: "❌ This control action requires Group Admin permissions." });
 
-            // Toggle Handler: Antilink
-            if (command === 'antilink') {
-                if (!isAdmin) return await sock.sendMessage(from, { text: "❌ *Access Denied:* This command is restricted to group admins." });
-                const targetState = args[0]?.toLowerCase();
+                const field = command === 'antilink' ? 'antilink_enabled' : 'welcome_enabled';
+                const value = args.toLowerCase() === 'on';
 
-                if (targetState === 'on') {
-                    await updateSetting(from, 'antilink', true);
-                    await sock.sendMessage(from, { text: "✅ *Anti-Link Shield Active.* Guarding group against spam links." });
-                } else if (targetState === 'off') {
-                    await updateSetting(from, 'antilink', false);
-                    await sock.sendMessage(from, { text: "🔓 *Anti-Link Deactivated.* Users can now share links freely." });
-                } else {
-                    await sock.sendMessage(from, { text: "📋 Usage: \`.antilink on\` or \`.antilink off\`" });
-                }
-                return;
-            }
-
-            // Toggle Handler: Auto Status View/React
-            if (command === 'autostatus') {
-                if (!isAdmin) return await sock.sendMessage(from, { text: "❌ Admin privileges required." });
-                const targetState = args[0]?.toLowerCase();
-
-                if (targetState === 'on') {
-                    await updateSetting('status_global', 'autoviewstatus', true);
-                    await updateSetting('status_global', 'autoreactstatus', true);
-                    await sock.sendMessage(from, { text: "✅ *Auto Status Actions Enabled Globally.*" });
-                } else if (targetState === 'off') {
-                    await updateSetting('status_global', 'autoviewstatus', false);
-                    await updateSetting('status_global', 'autoreactstatus', false);
-                    await sock.sendMessage(from, { text: "🛑 *Auto Status Actions Suspended Globally.*" });
-                } else {
-                    await sock.sendMessage(from, { text: "📋 Usage: \`.autostatus on\` or \`.autostatus off\`" });
-                }
-                return;
+                await pool.query(
+                    `INSERT INTO bot_users (phone, ${field}) VALUES ($1, $2) ON CONFLICT (phone) DO UPDATE SET ${field} = $2`,
+                    [phone, value]
+                );
+                await sock.sendMessage(from, { text: `🎯 *Configuration updated!* Feature \`.${command}\` set to: *${value ? 'ENABLED' : 'DISABLED'}*` });
             }
 
             if (command === 'groupinfo' && isGroup) {
                 const metadata = await sock.groupMetadata(from);
-                await sock.sendMessage(from, { text: `📋 *Group Name:* ${metadata.subject}\n👥 *Total Members:* ${metadata.participants.length}` });
+                await sock.sendMessage(from, { text: `📋 *Group:* ${metadata.subject}\n👥 *Total Members:* ${metadata.participants.length}` });
             }
         }
     });
 }
 
+// REST Portal Handler Engine
 app.post('/pair', async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: "Provide a phone number" });
+    const { phone, password } = req.body;
+    
+    // Validate System Master Password
+    if (password !== process.env.MASTER_PASSWORD) {
+        return res.status(401).json({ error: "Invalid master authentication token" });
+    }
+    if (!phone) return res.status(400).json({ error: "Missing Target Phone Parameter" });
 
     try {
         const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${phone}`);
-        const sock = makeWASocket({ auth: state, logger: pino({ level: 'silent' }) });
+        const sock = makeWASocket({
+            auth: state,
+            logger: pino({ level: 'silent' })
+        });
+
         sock.ev.on('creds.update', saveCreds);
-        startBotLogic(sock);
+        startBotLogic(sock, phone);
+
+        // Populate initial database profile configuration record
+        await pool.query('INSERT INTO bot_users (phone) VALUES ($1) ON CONFLICT (phone) DO NOTHING', [phone]);
 
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(phone);
                 res.json({ success: true, code: code });
             } catch (err) {
-                res.status(500).json({ error: "Connection setup timed out." });
+                res.status(500).json({ error: "Token generation timed out. Try again." });
             }
         }, 3000);
+
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`KING BM server running.`));
+app.listen(PORT, () => console.log(`KING BM Multi-Session Controller active on node:${PORT}`));

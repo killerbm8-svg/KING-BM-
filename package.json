@@ -1,5 +1,5 @@
 {
-  "name": "whatsapp-platform",
+  "name": "KING🤴 BM",
   "version": "1.0.0",
   "description": "Multi-device WhatsApp Bot Platform",
   "main": "index.js",
@@ -11,6 +11,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "pg": "^8.11.5",
-    "pino": "^8.21.0"
+    "pino": "^8.21.0",
+    "yt-search": "^2.10.4",
+    "ytdl-core": "^4.11.5"
   }
 }

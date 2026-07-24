@@ -1,5 +1,11 @@
 # 👑 KING 🤴 BM — Multi-Device WhatsApp Bot Platform
 
+<!-- Banner Image -->
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/9c031c8a-74e9-4ca9-aa3a-b341ffd036e2" width="85%" height="auto">
+</p>
+
+
 Welcome to **KING 🤴 BM**, a powerful, modern, multi-session WhatsApp automation platform built with Node.js and the robust `@whiskeysockets/baileys` library. This platform allows multiple users to connect their unique WhatsApp accounts concurrently using lightweight pairing codes, opening up a world of seamless automated management, protection, and group utility.
 
 ---

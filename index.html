@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Linker Platform</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #121212; color: white; text-align: center; }
+        input { padding: 10px; width: 80%; max-width: 300px; margin-bottom: 10px; border-radius: 5px; }
+        button { padding: 10px 20px; background: #25D366; color: black; border: none; border-radius: 5px; font-weight: bold;}
+        #codeDisplay { font-size: 24px; color: #25D366; margin-top: 20px; font-weight: bold; letter-spacing: 2px;}
+    </style>
+</head>
+<body>
+    <h2>Link Your Bot Instance</h2>
+    <input type="number" id="phone" placeholder="2547XXXXXXXX (Country Code)">
+    <br>
+    <button onclick="getCode()">Get Pairing Code</button>
+    <div id="codeDisplay"></div>
+
+    <script>
+        async function getCode() {
+            const phone = document.getElementById('phone').value;
+            const display = document.getElementById('codeDisplay');
+            display.innerText = "Generating code... please wait 5 seconds...";
+            
+            const res = await fetch('/pair', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+            });
+            const data = await res.json();
+            if(data.success) {
+                display.innerText = "YOUR CODE: " + data.code;
+            } else {
+                display.innerText = "Error: " + data.error;
+            }
+        }
+    </script>
+</body>
+</html>

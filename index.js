@@ -1,4 +1,5 @@
-const express = require('express');
+const ytSearch = require('yt-search');
+const ytdl = require('ytdl-core');
 const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Pool } = require('pg');

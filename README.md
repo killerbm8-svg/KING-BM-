@@ -101,8 +101,8 @@ When launching your server instance, configure the following critical environmen
 ## 📊 **Stats**
 
 <p align="center">
-  <img src="https://komarev.com/ghpvc/?username=Bwmxmd254&label=Profile+Views&color=FF0000&style=for-the-badge" alt="Views"/>
-  <img src="https://img.shields.io/github/followers/Bwmxmd254?label=GitHub+Followers&style=for-the-badge&color=00FF00" alt="Followers"/>
+  <img src="https://komarev.com/ghpvc/?username=Killerbm8&label=Profile+Views&color=FF0000&style=for-the-badge" alt="Views"/>
+  <img src="https://img.shields.io/github/followers/Killerbm8?label=GitHub+Followers&style=for-the-badge&color=00FF00" alt="Followers"/>
 </p>
 
 ---
@@ -110,7 +110,7 @@ When launching your server instance, configure the following critical environmen
 ## 🟢 **Status**
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Bwmxmd254/Bwmxmd254/main/assets/statusbar.gif" height="25">
+  <img src="https://raw.githubusercontent.com/Killerbm8/Killerbm8/main/assets/statusbar.gif" height="25">
   <br>
   <span style="font-size:1.2em; color:#00FF00;">Status: <b>🟢 ONLINE</b></span>
 </p>
@@ -123,5 +123,5 @@ When launching your server instance, configure the following critical environmen
 </p>
 
 <p align="center">
-  <strong>BWM XMD PRO © 2026 | Developed by Ibrahim Adams</strong>
+  <strong>KING 🤴 BM PRO © 2026 | Developed by Killer Bm</strong>
 </p>

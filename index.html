@@ -1,37 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Linker Platform</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KING 🤴 BM - Dashboard</title>
     <style>
-        body { font-family: Arial; padding: 20px; background: #121212; color: white; text-align: center; }
-        input { padding: 10px; width: 80%; max-width: 300px; margin-bottom: 10px; border-radius: 5px; }
-        button { padding: 10px 20px; background: #25D366; color: black; border: none; border-radius: 5px; font-weight: bold;}
-        #codeDisplay { font-size: 24px; color: #25D366; margin-top: 20px; font-weight: bold; letter-spacing: 2px;}
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 20px; 
+            background-color: #121214; 
+            color: #e1e1e6; 
+            text-align: center; 
+        }
+        .container {
+            max-width: 450px;
+            margin: 40px auto;
+            background: #19191d;
+            padding: 30px;
+            border-radius: 12px;
+            border: 1px solid #25d366;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        }
+        h2 { color: #25d366; margin-bottom: 5px; font-size: 26px; }
+        p { color: #8d8d99; font-size: 14px; margin-bottom: 25px; }
+        input { 
+            padding: 12px; 
+            width: 90%; 
+            margin-bottom: 15px; 
+            background: #202024;
+            border: 1px solid #29292e;
+            border-radius: 6px; 
+            color: white;
+            font-size: 16px;
+        }
+        input:focus { border-color: #25d366; outline: none; }
+        button { 
+            padding: 12px 24px; 
+            background: #25d366; 
+            color: #0c0c0e; 
+            border: none; 
+            border-radius: 6px; 
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            width: 95%;
+            transition: 0.2s;
+        }
+        button:hover { background: #1ebd59; }
+        #codeDisplay { 
+            font-size: 26px; 
+            color: #25d366; 
+            margin-top: 25px; 
+            font-weight: bold; 
+            letter-spacing: 3px;
+            background: #202024;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h2>Link Your Bot Instance</h2>
-    <input type="number" id="phone" placeholder="2547XXXXXXXX (Country Code)">
-    <br>
-    <button onclick="getCode()">Get Pairing Code</button>
-    <div id="codeDisplay"></div>
+    <div class="container">
+        <h2>KING 🤴 BM</h2>
+        <p>Deploy and link your multi-session automation instance</p>
+        
+        <input type="password" id="password" placeholder="Enter System Master Password">
+        <input type="number" id="phone" placeholder="2547XXXXXXXX (Country Code)">
+        
+        <button onclick="getCode()">Request Pairing Code</button>
+        <div id="codeDisplay"></div>
+    </div>
 
     <script>
         async function getCode() {
             const phone = document.getElementById('phone').value;
+            const password = document.getElementById('password').value;
             const display = document.getElementById('codeDisplay');
-            display.innerText = "Generating code... please wait 5 seconds...";
+            
+            if(!password || !phone) {
+                alert("Please fill in both fields.");
+                return;
+            }
+            
+            display.style.display = "block";
+            display.style.color = "#8d8d99";
+            display.innerText = "Connecting to socket core...";
             
             const res = await fetch('/pair', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone })
+                body: JSON.stringify({ phone, password })
             });
             const data = await res.json();
             if(data.success) {
-                display.innerText = "YOUR CODE: " + data.code;
+                display.style.color = "#25d366";
+                display.innerText = data.code;
             } else {
+                display.style.color = "#ea4335";
                 display.innerText = "Error: " + data.error;
             }
         }

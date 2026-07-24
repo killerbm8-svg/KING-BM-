@@ -65,3 +65,7 @@ When launching your server instance, configure the following critical environmen
     <img src="https://img.shields.io/badge/📢_WHATSAPP_GROUP-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
   </a>
   <br>
+  <a href="https://t.me/+3GVymuRshyw1ZDQ0" target="_blank">
+    <img src="https://img.shields.io/badge/📢_TELEGRAM_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
+  </a>
+  <br>

@@ -22,6 +22,19 @@ Welcome to **KING 🤴 BM**, a powerful, modern, multi-session WhatsApp automati
 *   **Relational Database Memory**: PostgreSQL
 
 ---
+### **Step 1: Get Session ID**
+Click the button below to quickly generate your WhatsApp session ID:
+
+<p align="center">
+  <a href="https://spoiler-bm.onrender.com" target="_blank">
+    <img src="https://img.shields.io/badge/🔑_GET_SESSION-000000?style=for-the-badge&color=FF0000" width="260" height="50"/>
+  </a>
+</p>
+
+### **Step 2: Configure Settings**
+Before deployment, configure your bot:
+- **Option A:** Edit `config.env` file
+- **Option B:** Use environment variables on your 
 
 ## ⚙️ Direct Deployment Guide
 

@@ -53,3 +53,11 @@ When launching your server instance, configure the following critical environmen
 | `.menu` / `.help` | Displays the status of active features and lists operational commands. | Public & Private |
 | `.ping` | Runs a system ping to test latency and platform responsiveness. | Public & Private |
 | `.groupinfo` | Displays live group statistics, participant metrics, and subject titles. | Group Chats Only |
+
+## 📢 **Stay Updated**
+
+<p align="center">
+  <a href="https://whatsapp.com/channel/0029VbAuCjELtOj5n8Lv9h3d" target="_blank">
+    <img src="https://img.shields.io/badge/📢_WHATSAPP_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
+  </a>
+  <br>

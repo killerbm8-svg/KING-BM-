@@ -1,191 +1,90 @@
+const express = require('express');
 const { 
     default: makeWASocket, 
     useMultiFileAuthState, 
     DisconnectReason, 
-    downloadMediaMessage 
+    Browsers 
 } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
 const pino = require('pino');
-const fs = require('fs');
-const exec = require('child_process').exec;
-const axios = require('axios');
-const qrcode = require('qrcode-terminal');
+const { Boom } = require('@hapi/boom');
 
-// Configuration Settings
-const PREFIX = ".";
-const BOT_NAME = "KING BM PRO";
+const app = express();
+const port = process.env.PORT || 3000;
 
-async function startBot() {
-    // Manages session authentication memory folders safely
-    const { state, saveCreds } = await useMultiFileAuthState('./session_auth_data');
+// Simple web endpoint to satisfy hosting provider uptime monitoring
+app.get('/', (req, res) => {
+    res.send('KING-BM Bot is active and running.');
+});
+
+app.listen(port, () => {
+    console.log(`Web application container listening on port ${port}`);
+});
+
+async function connectToWhatsApp() {
+    // Initializes session tracking in a local directory folder
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info_multi');
 
     const sock = makeWASocket({
-        logger: pino({ level: 'silent' }),
+        logger: pino({ level: 'silent' }), // Suppresses flooding logs to protect terminal performance
         auth: state,
-        printQRInTerminal: true
+        printQRInTerminal: false, // Forces pairing code functionality over QR engine
+        // Crucial: Set a standard browser fingerprint to stop WhatsApp from rejecting the code
+        browser: Browsers.ubuntu('Chrome'), 
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 30000
     });
 
-    // Save credentials when updated
-    sock.ev.on('creds.update', saveCreds);
+    // Automatically triggers pairing code extraction via environment variables or console argument
+    const targetPhone = process.env.PHONE_NUMBER; 
+    if (targetPhone && !sock.authState.creds.registered) {
+        setTimeout(async () => {
+            try {
+                // Cleans raw numbers to exact E.164 string format
+                const cleanedNumber = targetPhone.replace(/[^0-9]/g, '');
+                console.log(`[SYSTEM] Initializing request for pairing code: ${cleanedNumber}`);
+                const pairingCode = await sock.requestPairingCode(cleanedNumber);
+                console.log(`\n==========================================\n`);
+                console.log(`YOUR WHATSAPP PAIRING CODE: ${pairingCode}`);
+                console.log(`\n==========================================\n`);
+            } catch (pairingError) {
+                console.error('[ERROR] Failed to fetch pairing code:', pairingError.message);
+            }
+        }, 5000); // 5-second buffer to stabilize network handshake
+    }
 
-    // Track Connection State Changes
+    // Handles reconnection state alterations natively
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            console.log('--- SCAN THE QR CODE BELOW TO CONNECT ---');
-            qrcode.generate(qr, { small: true });
-        }
-        
+        const { connection, lastDisconnect } = update;
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error instanceof Boom) 
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom) 
                 ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut 
                 : true;
-            console.log('Connection closed due to error, reconnecting: ', shouldReconnect);
+            console.log('[SYSTEM] Connection lost due to error. Reconnecting status:', shouldReconnect);
             if (shouldReconnect) {
-                startBot();
+                connectToWhatsApp();
             }
         } else if (connection === 'open') {
-            console.log(`🟢 ${BOT_NAME} Successfully Connected to WhatsApp!`);
+            console.log('[SUCCESS] WhatsApp device successfully linked to KING-BM bot structure.');
         }
     });
 
-    // Core Message Listening & Unified Command Core Handler
-    sock.ev.on('messages.upsert', async (chatUpdate) => {
-        try {
-            const msg = chatUpdate.messages[0];
-            if (!msg.message || msg.key.fromMe) return;
+    // Event listener to periodically save session validation data securely
+    sock.ev.on('creds.update', saveCreds);
 
-            const chatId = msg.key.remoteJid;
-            const isGroup = chatId.endsWith('@g.us');
-            
-            // Extract textual contents across text, captions, and links
-            const messageText = msg.message.conversation || 
-                                msg.message.extendedTextMessage?.text || 
-                                msg.message.imageMessage?.caption || 
-                                msg.message.videoMessage?.caption || "";
-            
-            // Safe exit if prefix criteria isn't met
-            if (!messageText.startsWith(PREFIX)) return;
+    // Simple ping command architecture
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
 
-            // Parsing structures splits terms and isolate variables
-            const args = messageText.slice(PREFIX.length).trim().split(/ +/);
-            const command = args.shift().toLowerCase();
-            const sender = msg.key.participant || msg.key.remoteJid;
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        const from = msg.key.remoteJid;
 
-            // Fetch structural data fields for Group Admin Checkers
-            let groupMetadata = isGroup ? await sock.groupMetadata(chatId) : null;
-            let groupAdmins = isGroup ? groupMetadata.participants.filter(p => p.admin).map(p => p.id) : [];
-            let isBotAdmin = isGroup ? groupAdmins.includes(sock.user.id.split(':')[0] + '@s.whatsapp.net') : false;
-            let isSenderAdmin = isGroup ? groupAdmins.includes(sender) : false;
+        if (text.toLowerCase() === '.ping') {
+            await sock.sendMessage(from, { text: 'Pong! 👑 KING-BM is online.' }, { quoted: msg });
+        }
+    });
+}
 
-            // Execute Actions via System Command Router Switch
-            switch (command) {
-                
-                case "menu":
-                case "help":
-                    const menuText = `👑 *${BOT_NAME} COMMAND MENU* 🤴\n\n` +
-                        `*Prefix:* [ ${PREFIX} ]\n\n` +
-                        `⚙️ *SYSTEM COMMANDS*\n` +
-                        `▫️ \`${PREFIX}ping\` - Check latency metrics.\n` +
-                        `▫️ \`${PREFIX}runtime\` - View bot online uptime.\n\n` +
-                        `👥 *GROUP ADMIN TOOLS*\n` +
-                        `▫️ \`${PREFIX}groupinfo\` - Display group parameters.\n` +
-                        `▫️ \`${PREFIX}kick @user\` - Expel a user from chat.\n` +
-                        `▫️ \`${PREFIX}tagall\` - Tag all chat members.\n` +
-                        `▫️ \`${PREFIX}link\` - Retrieve group invite link.\n\n` +
-                        `🎨 *CONVERTERS*\n` +
-                        `▫️ \`${PREFIX}sticker\` (or \`${PREFIX}s\`) - Media to sticker.\n\n` +
-                        `🧠 *UTILITIES & SEARCH*\n` +
-                        `▫️ \`${PREFIX}weather [city]\` - Get climate reports.\n\n` +
-                        `_*KING BM PRO © 2026 | Developed by Killer Bm*_`;
-                    
-                    await sock.sendMessage(chatId, { text: menuText }, { quoted: msg });
-                    break;
-
-                case "ping":
-                    const startTime = Date.now();
-                    await sock.sendMessage(chatId, { text: "⏳ Analyzing connection node..." }, { quoted: msg });
-                    const latency = Date.now() - startTime;
-                    await sock.sendMessage(chatId, { text: `🤖 *Pong!* Response Latency: *${latency}ms*` }, { quoted: msg });
-                    break;
-
-                case "runtime":
-                    const uptime = process.uptime();
-                    const hours = Math.floor(uptime / 3600);
-                    const minutes = Math.floor((uptime % 3600) / 60);
-                    const seconds = Math.floor(uptime % 60);
-                    await sock.sendMessage(chatId, { text: `⏳ *Uptime:* ${hours}h ${minutes}m ${seconds}s` }, { quoted: msg });
-                    break;
-
-                case "groupinfo":
-                    if (!isGroup) return sock.sendMessage(chatId, { text: "❌ This command is restricted to group chats only." });
-                    const infoText = `📊 *GROUP METRICS*\n\n` +
-                        `📝 *Subject:* ${groupMetadata.subject}\n` +
-                        `🆔 *ID:* ${groupMetadata.id}\n` +
-                        `👥 *Total Participants:* ${groupMetadata.participants.length}\n` +
-                        `👑 *Admins Total:* ${groupAdmins.length}`;
-                    await sock.sendMessage(chatId, { text: infoText }, { quoted: msg });
-                    break;
-
-                case "kick":
-                    if (!isGroup) return sock.sendMessage(chatId, { text: "❌ This command only works in group environments." });
-                    if (!isBotAdmin) return sock.sendMessage(chatId, { text: "❌ Elevation required: Make the bot an admin." });
-                    if (!isSenderAdmin) return sock.sendMessage(chatId, { text: "❌ Execution denied: Only Admins can invoke kick actions." });
-
-                    let userToKick = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                    if (!userToKick && msg.message.extendedTextMessage?.contextInfo?.quotedMessage) {
-                        userToKick = msg.message.extendedTextMessage.contextInfo.participant;
-                    }
-                    if (!userToKick && args[0]) {
-                        userToKick = args[0].replace(/[^0-9]/g, '') + "@s.whatsapp.net";
-                    }
-
-                    if (!userToKick) return sock.sendMessage(chatId, { text: "👉 Mention, tag, or reply to a participant to expel them." });
-
-                    await sock.groupParticipantsUpdate(chatId, [userToKick], "remove");
-                    await sock.sendMessage(chatId, { text: "✅ Target user removed successfully." }, { quoted: msg });
-                    break;
-
-                case "tagall":
-                    if (!isGroup) return;
-                    if (!isSenderAdmin) return sock.sendMessage(chatId, { text: "❌ Admin privileges required." });
-
-                    let participants = groupMetadata.participants.map(p => p.id);
-                    let tagMessage = `📢 *Attention Everyone!*\n\n*Message:* ${args.join(" ") || "No notice broadcasted."}\n\n`;
-                    for (let mem of participants) {
-                        tagMessage += `👤 @${mem.split("@")[0]}\n`;
-                    }
-                    await sock.sendMessage(chatId, { text: tagMessage, mentions: participants });
-                    break;
-
-                case "link":
-                case "invite":
-                    if (!isGroup) return;
-                    if (!isBotAdmin) return sock.sendMessage(chatId, { text: "❌ Bot administrative access is required to read links." });
-                    const inviteCode = await sock.groupInviteCode(chatId);
-                    await sock.sendMessage(chatId, { text: `🔗 *Group Invite Link:* https://whatsapp.com{inviteCode}` }, { quoted: msg });
-                    break;
-
-                case "weather":
-                    if (args.length === 0) return sock.sendMessage(chatId, { text: "🔍 Specify target city: Ex: `.weather Nairobi`" });
-                    try {
-                        const city = args.join(" ");
-                        const res = await axios.get(`https://wttr.in{city}?format=3`);
-                        await sock.sendMessage(chatId, { text: `🌤 *Weather Metrics:* ${res.data.trim()}` }, { quoted: msg });
-                    } catch {
-                        await sock.sendMessage(chatId, { text: "❌ Target location unrecognized or communication timeout." });
-                    }
-                    break;
-
-                case "sticker":
-                case "s":
-                    // Isolating media variables from original or replied message frames
-                    const isMessageImage = msg.message.imageMessage;
-                    const isMessageVideo = msg.message.videoMessage;
-                    const isQuotedImage = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
-                    const isQuotedVideo = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
-
-                    if (!isMessageImage && !isMessageVideo && !isQuotedImage && !isQuotedVideo) {
-                        return sock.sendMessage(chatId, { text: "📷 Tag or send an image or brief video clip using `.sticker`" });
-
+// Launches core engine loop
+connectToWhatsApp().catch(err => console.error('[CRITICAL RUNTIME ERROR]:', err));

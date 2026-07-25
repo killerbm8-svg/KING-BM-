@@ -1,4 +1,4 @@
-# 👑 KING 🤴 BM — Multi-Device WhatsApp Bot Platform
+# 👑 KING 🤴 BM 
 
 <!-- Banner Image -->
 <p align="center">

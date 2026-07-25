@@ -1,7 +1,7 @@
 {
   "name": "king-bm",
   "version": "1.0.0",
-  "description": "WhatsApp automation platform dashboard",
+  "description": "WhatsApp public multi-session platform dashboard",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -10,9 +10,10 @@
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.6.0",
     "express": "^4.19.2",
-    "pino": "^9.1.0"
+    "pino": "^9.1.0",
+    "qrcode": "^1.5.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   }
 }

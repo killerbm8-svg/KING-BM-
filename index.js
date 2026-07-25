@@ -9,23 +9,20 @@ const pino = require('pino');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
-const { Boom } = require('@hapi/boom'); // Added the exact missing error wrapper reference 
+const { Boom } = require('@hapi/boom');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Global memory registry keeping track of all concurrent public live sessions
 const activeSessions = {};
-
 const sessionsDir = path.join(__dirname, 'sessions');
+
 if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });
 }
 
-// Main Interactive Dashboard View
 app.get('/', (req, res) => {
     const targetPhone = req.query.phone ? req.query.phone.replace(/[^0-9]/g, '') : null;
-    
     let qrBox = `<p style="color:#94a3b8; font-size: 14px; margin: 40px 10px;">Enter a phone number on the right to load its distinct live visual QR streaming array.</p>`;
     let codeDisplay = "No text code generated yet.";
     let statusLabel = targetPhone && activeSessions[targetPhone] ? activeSessions[targetPhone].status : "Idle / Disconnected";
@@ -65,7 +62,6 @@ app.get('/', (req, res) => {
         <p>Target Number Context: <span class="badge">${targetPhone ? '+' + targetPhone : 'None'}</span> | Status: <strong style="color:#38bdf8">${statusLabel}</strong></p>
         
         <div class="container">
-            <!-- Left Panel: QR Stream Box -->
             <div class="box">
                 <h3 style="margin-top:0;">Option 1: Scan QR Code</h3>
                 <div style="background:white; padding:15px; border-radius:8px; display:inline-block; margin: 10px auto; width: fit-content; min-width:220px; min-height:220px;">
@@ -73,8 +69,6 @@ app.get('/', (req, res) => {
                 </div>
                 <p style="font-size:12px; color:#94a3b8; margin-bottom:0;">Visual web synchronization layout</p>
             </div>
-
-            <!-- Right Panel: Pairing Form & Code Output -->
             <div class="box">
                 <h3 style="margin-top:0;">Option 2: Get Pairing Code</h3>
                 <form action="/start-session" method="GET">
@@ -94,21 +88,14 @@ app.get('/', (req, res) => {
     `);
 });
 
-// Explicit session execution engine trigger route
 app.get('/start-session', async (req, res) => {
     let rawPhone = req.query.phone;
     if (!rawPhone) return res.redirect('/');
-    
     const cleanedNumber = rawPhone.replace(/[^0-9]/g, '');
-    
-    // Fire up the WhatsApp connection protocol handler block for this user number
     startUserSession(cleanedNumber);
-
-    // Keep the browser processing for 5 seconds so WhatsApp registers the token before redirection
     res.send(`
         <div style="background:#0f172a; color:#fff; height:100vh; display:flex; justify-content:center; align-items:center; font-family:sans-serif; text-align:center; flex-direction:column;">
             <h2>Initializing secure authentication streams for +${cleanedNumber}...</h2>
-            <p style="color:#94a3b8;">Generating your unique QR matrix and pairing code keys concurrently...</p>
             <script>
                 setTimeout(() => { window.location.href = '/?phone=${cleanedNumber}'; }, 5000);
             </script>
@@ -117,7 +104,6 @@ app.get('/start-session', async (req, res) => {
 });
 
 async function startUserSession(phoneNumber) {
-    // Prevent double connection loops if the profile is already authenticated or active
     if (activeSessions[phoneNumber]) {
         if (activeSessions[phoneNumber].status === "Connected") return;
         try { activeSessions[phoneNumber].sock.end(); } catch(e) {}
@@ -144,35 +130,28 @@ async function startUserSession(phoneNumber) {
 
     activeSessions[phoneNumber].sock = sock;
 
-    // Separate text code extraction runtime queue
     setTimeout(async () => {
         try {
             if (activeSessions[phoneNumber] && !sock.authState.creds.registered) {
-                console.log(`[STREAM] Fetching text pairing sequence for +${phoneNumber}`);
                 const code = await sock.requestPairingCode(phoneNumber);
                 if (activeSessions[phoneNumber]) {
                     activeSessions[phoneNumber].pairingCode = code;
                 }
             }
         } catch (err) {
-            console.error("Text code stream rejected:", err.message);
-            if (activeSessions[phoneNumber]) activeSessions[phoneNumber].pairingCode = "REFUSED / RETRY";
+            if (activeSessions[phoneNumber]) activeSessions[phoneNumber].pairingCode = "REFUSED";
         }
     }, 3500);
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
-
         if (!activeSessions[phoneNumber]) return;
 
-        // Convert the incoming QR text string into a scannable image URL string dynamically
         if (qr) {
             try {
                 activeSessions[phoneNumber].qrUrl = await QRCode.toDataURL(qr);
                 activeSessions[phoneNumber].status = "QR Code Ready";
-            } catch(e) {
-                console.error("QR formatting failed:", e);
-            }
+            } catch(e) {}
         }
 
         if (connection === 'close') {
@@ -190,16 +169,12 @@ async function startUserSession(phoneNumber) {
             activeSessions[phoneNumber].status = "Connected";
             activeSessions[phoneNumber].pairingCode = "CONNECTED ✅";
             activeSessions[phoneNumber].qrUrl = "";
-            console.log(`[CLUSTER SUCCESS] Number +${phoneNumber} linked cleanly.`);
         }
     });
 
     sock.ev.on('creds.update', saveCreds);
+}
 
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages;
-        if (!msg.message || msg.key.fromMe) return;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-        const from = msg.key.remoteJid;
-
-        if (text.toLowerCase() === '.ping') {
+app.listen(port, () => {
+    console.log(`Multi-session router active on port ${port}`);
+});

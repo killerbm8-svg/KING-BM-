@@ -117,7 +117,7 @@ When launching your server instance, configure the following critical environmen
 
 <p align="center">
   <img src="https://komarev.com/ghpvc/?username=Killerbm8&label=Profile+Views&color=FF0000&style=for-the-badge" alt="Views"/>
-  <img src="https://img.shields.io/github/followers/killerbm8svg?label=GitHub+Followers&style=for-the-badge&color=00FF00" alt="Followers"/>
+  <img src="https://img.shields.io/github/followers/killerbm8-svg?label=GitHub+Followers&style=for-the-badge&color=00FF00" alt="Followers"/>
 </p>
 
 ---

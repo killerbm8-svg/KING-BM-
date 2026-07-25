@@ -3,7 +3,8 @@ const {
     default: makeWASocket, 
     useMultiFileAuthState, 
     DisconnectReason, 
-    Browsers 
+    Browsers,
+    fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
@@ -11,12 +12,10 @@ const { Boom } = require('@hapi/boom');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Variables to store the live status and code
 let livePairingCode = "No code generated yet. Enter your phone number below.";
 let botStatus = "Disconnected";
 let globalSock = null;
 
-// HTML Web Dashboard Layout
 function getHtmlDashboard(code, status) {
     return `
     <!DOCTYPE html>
@@ -33,7 +32,7 @@ function getHtmlDashboard(code, status) {
             .status span { padding: 4px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; }
             .online { background-color: #059669; color: #ecfdf5; }
             .offline { background-color: #dc2626; color: #fef2f2; }
-            .code-box { background-color: #020617; padding: 15px; border-radius: 8px; font-size: 22px; font-family: monospace; letter-spacing: 2px; color: #38bdf8; border: 1px dashed #0284c7; margin-bottom: 25px; word-break: break-all; }
+            .code-box { background-color: #020617; padding: 15px; border-radius: 8px; font-size: 24px; font-family: monospace; letter-spacing: 3px; color: #22c55e; border: 2px solid #15803d; margin-bottom: 25px; word-break: break-all; font-weight: bold; }
             input[type="text"] { width: 85%; padding: 12px; border-radius: 6px; border: 1px solid #475569; background-color: #0f172a; color: #fff; font-size: 16px; margin-bottom: 15px; text-align: center; }
             button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 92%; transition: background 0.2s; }
             button:hover { background-color: #1d4ed8; }
@@ -59,34 +58,28 @@ function getHtmlDashboard(code, status) {
     `;
 }
 
-// Serve the dashboard UI
 app.get('/', (req, res) => {
     res.send(getHtmlDashboard(livePairingCode, botStatus));
 });
 
-// Endpoint triggered when clicking the button
 app.get('/generate-code', async (req, res) => {
     let rawPhone = req.query.phone;
-    if (!rawPhone) {
-        return res.redirect('/');
-    }
+    if (!rawPhone) return res.redirect('/');
 
     const cleanedNumber = rawPhone.replace(/[^0-9]/g, '');
     livePairingCode = "Generating code... Please wait 5 seconds and refresh.";
     
-    // Trigger WhatsApp connection process for this specific number
     startWhatsAppSession(cleanedNumber);
 
-    // Briefly pause to let the socket initialize before serving screen updates
     setTimeout(() => {
         res.send(`
             <script>
-                setTimeout(() => { window.location.href = '/'; }, 4000);
+                setTimeout(() => { window.location.href = '/'; }, 5000);
             </script>
             <div style="background:#0f172a; color:#fff; height:100vh; display:flex; justify-content:center; align-items:center; font-family:sans-serif; text-align:center;">
                 <div>
-                    <h2>Requesting code for +${cleanedNumber}...</h2>
-                    <p>Redirecting you back to dashboard in a moment...</p>
+                    <h2>Requesting secure token for +${cleanedNumber}...</h2>
+                    <p>Redirecting you back to dashboard...</p>
                 </div>
             </div>
         `);
@@ -94,35 +87,40 @@ app.get('/generate-code', async (req, res) => {
 });
 
 async function startWhatsAppSession(phoneNumber) {
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info_multi');
+    // Explicitly uses a distinct folder namespace to bypass old corrupt cache structures
+    const { state, saveCreds } = await useMultiFileAuthState('session_storage_v2');
+    
+    // Automatically fetches the absolute latest Web protocol version metrics 
+    const { version } = await fetchLatestBaileysVersion();
 
-    // Close any existing active login sockets to avoid multi-instance conflicts
     if (globalSock) {
-        try { globalSock.logout(); } catch(e) {}
+        try { globalSock.end(); } catch(e) {}
     }
 
     globalSock = makeWASocket({
+        version,
         logger: pino({ level: 'silent' }),
         auth: state,
         printQRInTerminal: false,
-        browser: Browsers.ubuntu('Chrome'), // Crucial platform spoofing string
-        connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 30000
+        // Upgraded browser fingerprint array matching WhatsApp Web Desktop standard layouts
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
+        connectTimeoutMs: 90000,
+        keepAliveIntervalMs: 30000,
+        markOnlineOnConnect: true
     });
 
     if (!globalSock.authState.creds.registered) {
         setTimeout(async () => {
             try {
-                console.log(`[SYSTEM] Fetching dynamic pair code for: ${phoneNumber}`);
+                console.log(`[SYSTEM] Requesting signature pairing for: ${phoneNumber}`);
                 const code = await globalSock.requestPairingCode(phoneNumber);
-                // Split code into 4-4 layout (e.g. ABCD-EFGH) for visual readability
                 livePairingCode = code; 
-                console.log(`[SUCCESS] New Live Web Pairing Code: ${code}`);
+                console.log(`[SUCCESS] Outputting secure validation code: ${code}`);
             } catch (err) {
-                livePairingCode = "Error: " + err.message;
+                livePairingCode = "Failed to fetch code. Try again.";
                 console.error(err);
             }
-        }, 4000);
+        }, 5000);
     }
 
     globalSock.ev.on('connection.update', (update) => {
@@ -137,8 +135,7 @@ async function startWhatsAppSession(phoneNumber) {
             }
         } else if (connection === 'open') {
             botStatus = "Connected";
-            livePairingCode = "LINKED SUCCESSFULLY! 🎉";
-            console.log('[SUCCESS] Web connection active.');
+            livePairingCode = "CONNECTED SUCCESSFULLY! 🎉";
         }
     });
 
@@ -157,5 +154,5 @@ async function startWhatsAppSession(phoneNumber) {
 }
 
 app.listen(port, () => {
-    console.log(`Dashboard active via container networking engine on port ${port}`);
+    console.log(`Dashboard active on port ${port}`);
 });

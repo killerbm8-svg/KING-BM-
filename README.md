@@ -37,6 +37,11 @@ Click the button below to quickly generate your WhatsApp session ID:
   </a>
 </p>
 
+### **Step 2: Configure Settings**
+Before deployment, configure your bot:
+- **Option A:** Edit `config.env` file
+- **Option B:** Use environment variables on your 
+
 ### **Step 3: Choose Hosting Platform**
 Deploy the bot on your preferred platform.
 
@@ -51,11 +56,6 @@ Deploy the bot on your preferred platform.
     <img src="https://img.shields.io/badge/🚀_RAILWAY-000000?style=for-the-badge&color=purple" width="200" height="45"/>
   </a>
 </p>
-
-### **Step 2: Configure Settings**
-Before deployment, configure your bot:
-- **Option A:** Edit `config.env` file
-- **Option B:** Use environment variables on your 
 
 ## ⚙️ Direct Deployment Guide
 

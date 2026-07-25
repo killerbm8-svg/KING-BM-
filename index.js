@@ -1,158 +1,96 @@
 const express = require('express');
-const { 
-    default: makeWASocket, 
-    useMultiFileAuthState, 
-    DisconnectReason, 
-    Browsers,
-    fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { Boom } = require('@hapi/boom');
+const QRCode = require('qrcode');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-let livePairingCode = "No code generated yet. Enter your phone number below.";
+let currentQrImageUrl = "";
+let livePairingCode = "No text code generated yet. Request one below.";
 let botStatus = "Disconnected";
 let globalSock = null;
 
-function getHtmlDashboard(code, status) {
+// HTML Unified Dual-Authentication Dashboard (Simplified)
+function getHtmlDashboard(qrImageUrl, textCode, status) {
+    let qrBox = qrImageUrl ? `<img src="${qrImageUrl}" alt="Scan QR" style="width:200px; height:200px;"/>` : `<div style="padding: 60px 10px;">Generating QR...</div>`;
+    let statusBadge = status === "Connected" ? `<span style="color:green">CONNECTED 🎉</span>` : `<span style="color:red">${status.toUpperCase()}</span>`;
+
     return `
     <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>KING-BM Pairing Dashboard</title>
-        <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-            .card { background-color: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; max-width: 400px; width: 100%; border: 1px solid #334155; }
-            h1 { color: #e2e8f0; margin-bottom: 5px; font-size: 24px; }
-            .status { font-size: 14px; margin-bottom: 25px; color: #94a3b8; }
-            .status span { padding: 4px 8px; border-radius: 20px; font-weight: bold; font-size: 12px; }
-            .online { background-color: #059669; color: #ecfdf5; }
-            .offline { background-color: #dc2626; color: #fef2f2; }
-            .code-box { background-color: #020617; padding: 15px; border-radius: 8px; font-size: 24px; font-family: monospace; letter-spacing: 3px; color: #22c55e; border: 2px solid #15803d; margin-bottom: 25px; word-break: break-all; font-weight: bold; }
-            input[type="text"] { width: 85%; padding: 12px; border-radius: 6px; border: 1px solid #475569; background-color: #0f172a; color: #fff; font-size: 16px; margin-bottom: 15px; text-align: center; }
-            button { background-color: #2563eb; color: white; border: none; padding: 12px 20px; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; width: 92%; transition: background 0.2s; }
-            button:hover { background-color: #1d4ed8; }
-            .footer { margin-top: 25px; font-size: 12px; color: #64748b; }
-        </style>
-    </head>
+    <html>
+    <head><title>KING-BM Linker</title><style>body{font-family:sans-serif; background:#0f172a; color:#fff; text-align:center; padding:20px;}</style></head>
     <body>
-        <div class="card">
-            <h1>👑 KING-BM CONTROLLER</h1>
-            <div class="status">System Status: <span class="${status === 'Connected' ? 'online' : 'offline'}">${status.toUpperCase()}</span></div>
-            
-            <div class="code-box" id="codeDisplay">${code}</div>
-
-            <form action="/generate-code" method="GET">
-                <input type="text" name="phone" placeholder="e.g. 254712345678" required>
-                <button type="submit">Request Pairing Code</button>
-            </form>
-
-            <div class="footer">KING 🤴 BM PRO © 2026 | Refresh page to update status</div>
+        <h1>👑 KING-BM CONTROLLER</h1>
+        <div>Status: ${statusBadge}</div>
+        <div style="display:flex; justify-content:center; gap:20px; margin-top:20px;">
+            <div style="background:#1e293b; padding:20px; border-radius:12px;">
+                <h3>Scan QR Code</h3>
+                <div style="background:white; padding:10px;">${qrBox}</div>
+            </div>
+            <div style="background:#1e293b; padding:20px; border-radius:12px;">
+                <h3>Text Pairing Code</h3>
+                <div style="font-size:20px; color:#22c55e;">${textCode}</div>
+                <form action="/get-text-code" method="GET">
+                    <input type="text" name="phone" placeholder="e.g. 254712345678" required>
+                    <button type="submit">Fetch Code</button>
+                </form>
+            </div>
         </div>
+        <br><button onclick="window.location.reload()">🔄 Refresh</button>
     </body>
     </html>
     `;
 }
 
-app.get('/', (req, res) => {
-    res.send(getHtmlDashboard(livePairingCode, botStatus));
-});
+app.get('/', (req, res) => res.send(getHtmlDashboard(currentQrImageUrl, livePairingCode, botStatus)));
+app.get('/api/status', (req, res) => res.json({ status: botStatus }));
 
-app.get('/generate-code', async (req, res) => {
+app.get('/get-text-code', async (req, res) => {
     let rawPhone = req.query.phone;
     if (!rawPhone) return res.redirect('/');
-
     const cleanedNumber = rawPhone.replace(/[^0-9]/g, '');
-    livePairingCode = "Generating code... Please wait 5 seconds and refresh.";
-    
-    startWhatsAppSession(cleanedNumber);
-
-    setTimeout(() => {
-        res.send(`
-            <script>
-                setTimeout(() => { window.location.href = '/'; }, 5000);
-            </script>
-            <div style="background:#0f172a; color:#fff; height:100vh; display:flex; justify-content:center; align-items:center; font-family:sans-serif; text-align:center;">
-                <div>
-                    <h2>Requesting secure token for +${cleanedNumber}...</h2>
-                    <p>Redirecting you back to dashboard...</p>
-                </div>
-            </div>
-        `);
-    }, 1000);
+    livePairingCode = "FETCHING...";
+    initializeSocket(cleanedNumber);
+    setTimeout(() => res.redirect('/'), 4000);
 });
 
-async function startWhatsAppSession(phoneNumber) {
-    // Explicitly uses a distinct folder namespace to bypass old corrupt cache structures
+async function initializeSocket(requestedPhoneNumber = null) {
     const { state, saveCreds } = await useMultiFileAuthState('session_storage_v2');
-    
-    // Automatically fetches the absolute latest Web protocol version metrics 
     const { version } = await fetchLatestBaileysVersion();
-
-    if (globalSock) {
-        try { globalSock.end(); } catch(e) {}
-    }
+    if (globalSock) try { globalSock.end(); } catch(e) {}
 
     globalSock = makeWASocket({
-        version,
-        logger: pino({ level: 'silent' }),
-        auth: state,
-        printQRInTerminal: false,
-        // Upgraded browser fingerprint array matching WhatsApp Web Desktop standard layouts
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        connectTimeoutMs: 90000,
-        keepAliveIntervalMs: 30000,
-        markOnlineOnConnect: true
+        version, logger: pino({ level: 'silent' }), auth: state, printQRInTerminal: false,
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
-    if (!globalSock.authState.creds.registered) {
+    if (requestedPhoneNumber) {
         setTimeout(async () => {
             try {
-                console.log(`[SYSTEM] Requesting signature pairing for: ${phoneNumber}`);
-                const code = await globalSock.requestPairingCode(phoneNumber);
-                livePairingCode = code; 
-                console.log(`[SUCCESS] Outputting secure validation code: ${code}`);
-            } catch (err) {
-                livePairingCode = "Failed to fetch code. Try again.";
-                console.error(err);
-            }
-        }, 5000);
+                livePairingCode = await globalSock.requestPairingCode(requestedPhoneNumber);
+            } catch (err) { livePairingCode = "REJECTED"; }
+        }, 4000);
     }
 
-    globalSock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+    globalSock.ev.on('connection.update', async (update) => {
+        const { connection, qr } = update;
+        if (qr) currentQrImageUrl = await QRCode.toDataURL(qr);
         if (connection === 'close') {
             botStatus = "Disconnected";
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom) 
-                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut 
-                : true;
-            if (shouldReconnect) {
-                startWhatsAppSession(phoneNumber);
-            }
+            currentQrImageUrl = "";
+            initializeSocket();
         } else if (connection === 'open') {
             botStatus = "Connected";
-            livePairingCode = "CONNECTED SUCCESSFULLY! 🎉";
+            currentQrImageUrl = "";
+            livePairingCode = "SUCCESSFUL LINK ✅";
         }
     });
-
     globalSock.ev.on('creds.update', saveCreds);
-
-    globalSock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
-        if (!msg.message || msg.key.fromMe) return;
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-        const from = msg.key.remoteJid;
-
-        if (text.toLowerCase() === '.ping') {
-            await globalSock.sendMessage(from, { text: 'Pong! 👑 KING-BM is online.' }, { quoted: msg });
-        }
-    });
 }
 
 app.listen(port, () => {
-    console.log(`Dashboard active on port ${port}`);
+    console.log(`Server running on port ${port}`);
+    initializeSocket().catch(console.error);
 });

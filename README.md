@@ -20,6 +20,23 @@ Welcome to **KING 🤴 BM**, a powerful, modern, multi-session WhatsApp automati
 
 ---
 
+## 📢 **Stay Updated**
+
+<p align="center">
+  <a href="https://whatsapp.com/channel/0029VbChWLcCRs1nIoOoyk2T" target="_blank">
+    <img src="https://img.shields.io/badge/📢_WHATSAPP_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
+  </a>
+  <br>
+  <a href="https://chat.whatsapp.com/HFkhRciXPv60qkmcKGIX3w?s=cl&p=a&mlu=0&ilr=0&amv=1" target="_blank">
+    <img src="https://img.shields.io/badge/📢_WHATSAPP_GROUP-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
+  </a>
+  <br>
+  <a href="https://t.me/+3GVymuRshyw1ZDQ0" target="_blank">
+    <img src="https://img.shields.io/badge/📢_TELEGRAM_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
+  </a>
+  <br>
+  
+
 ## 🛠️ Built-With Stack
 
 *   **Runtime Engine**: Node.js (v18+)
@@ -88,21 +105,7 @@ When launching your server instance, configure the following critical environmen
 | `.ping` | Runs a system ping to test latency and platform responsiveness. | Public & Private |
 | `.groupinfo` | Displays live group statistics, participant metrics, and subject titles. | Group Chats Only |
 
-## 📢 **Stay Updated**
 
-<p align="center">
-  <a href="https://whatsapp.com/channel/0029VbChWLcCRs1nIoOoyk2T" target="_blank">
-    <img src="https://img.shields.io/badge/📢_WHATSAPP_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
-  </a>
-  <br>
-  <a href="https://chat.whatsapp.com/HFkhRciXPv60qkmcKGIX3w?s=cl&p=a&mlu=0&ilr=0&amv=1" target="_blank">
-    <img src="https://img.shields.io/badge/📢_WHATSAPP_GROUP-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
-  </a>
-  <br>
-  <a href="https://t.me/+3GVymuRshyw1ZDQ0" target="_blank">
-    <img src="https://img.shields.io/badge/📢_TELEGRAM_CHANNEL-25d366?style=for-the-badge&logo=whatsapp" width="300" height="50"/>
-  </a>
-  <br>
 
 ## 📊 **Stats**
 

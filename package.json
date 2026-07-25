@@ -1,19 +1,18 @@
 {
-  "name": "whatsapp-platform",
+  "name": "king-bm",
   "version": "1.0.0",
-  "description": "Multi-device WhatsApp Bot Platform",
+  "description": "WhatsApp automation platform dashboard",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.6.0",
-    "axios": "^1.7.2",
-    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "pg": "^8.11.5",
-    "pino": "^8.21.0",
-    "yt-search": "^2.10.4",
-    "ytdl-core": "^4.11.5"
+    "pino": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

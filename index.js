@@ -9,6 +9,7 @@ const pino = require('pino');
 const QRCode = require('qrcode');
 const path = require('path');
 const fs = require('fs');
+const { Boom } = require('@hapi/boom'); // Added the exact missing error wrapper reference 
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -202,5 +203,3 @@ async function startUserSession(phoneNumber) {
         const from = msg.key.remoteJid;
 
         if (text.toLowerCase() === '.ping') {
-            await sock.sendMessage(from, { text: 'Pong! 👑 KING-BM system cluster online.' }, { quoted: msg });
-        }

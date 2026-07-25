@@ -1,186 +1,191 @@
-const express = require('express');
-const { default: makeWASocket, useMultiFileAuthState, downloadContentFromMessage } = require('@whiskeysockets/baileys');
+const { 
+    default: makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    downloadMediaMessage 
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
 const pino = require('pino');
-const { Pool } = require('pg');
-const ytSearch = require('yt-search');
-const ytdl = require('ytdl-core');
+const fs = require('fs');
+const exec = require('child_process').exec;
 const axios = require('axios');
-require('dotenv').config();
+const qrcode = require('qrcode-terminal');
 
-const app = express();
-app.use(express.json());
-app.use(express.static(__dirname));
+// Configuration Settings
+const PREFIX = ".";
+const BOT_NAME = "KING BM PRO";
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+async function startBot() {
+    // Manages session authentication memory folders safely
+    const { state, saveCreds } = await useMultiFileAuthState('./session_auth_data');
 
-async function setupDatabase() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS bot_users (
-            phone TEXT PRIMARY KEY,
-            antilink_enabled BOOLEAN DEFAULT TRUE,
-            welcome_enabled BOOLEAN DEFAULT TRUE
-        );
-    `);
-}
-setupDatabase().catch(console.error);
+    const sock = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        auth: state,
+        printQRInTerminal: true
+    });
 
-function startBotLogic(sock, phone) {
-    // 1. TIMED SCHEDULER ENGINE (Runs checks every 60 seconds)
-    setInterval(async () => {
-        const now = new Date();
-        const hrs = now.getHours();
-        const mins = now.getMinutes();
+    // Save credentials when updated
+    sock.ev.on('creds.update', saveCreds);
 
-        // Query active group channels saved in database memory or cache
-        // For simplicity, we loop through groups the bot is currently in
-        if (mins === 0) { // Triggers exactly on the hour
-            try {
-                const groups = await sock.groupFetchAllParticipating();
-                const jids = Object.keys(groups);
-
-                for (let jid of jids) {
-                    if (hrs === 6) {
-                        await sock.sendMessage(jid, { text: '🌅 *Good Morning Everyone!* — Powered by *KING 🤴 BM*\nHave a highly productive day ahead!' });
-                    } else if (hrs === 22) {
-                        await sock.sendMessage(jid, { text: '🌌 *Good Night Everyone!* — Powered by *KING 🤴 BM*\nTime to log off and rest. Rest well!' });
-                    }
-                }
-            } catch (e) {
-                console.log('Scheduler delivery gap:', e.message);
-            }
+    // Track Connection State Changes
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        
+        if (qr) {
+            console.log('--- SCAN THE QR CODE BELOW TO CONNECT ---');
+            qrcode.generate(qr, { small: true });
         }
-    }, 60000);
-
-    // A. GROUP EVENTS: AUTOMATIC WELCOME GREETING
-    sock.ev.on('group-participants.update', async (update) => {
-        if (update.action === 'add') {
-            const from = update.id;
-            const dbCheck = await pool.query('SELECT welcome_enabled FROM bot_users WHERE phone = $1', [phone]);
-            if (dbCheck.rows?.welcome_enabled === false) return;
-
-            for (let participant of update.participants) {
-                const welcomeText = `👋 Hello @${participant.split('@')}!\n\nWelcome to our group! I am *KING 🤴 BM*, the automated group defender. Please follow the rules to avoid being kicked.`;
-                await sock.sendMessage(from, { text: welcomeText, mentions: [participant] });
+        
+        if (connection === 'close') {
+            const shouldReconnect = (lastDisconnect.error instanceof Boom) 
+                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut 
+                : true;
+            console.log('Connection closed due to error, reconnecting: ', shouldReconnect);
+            if (shouldReconnect) {
+                startBot();
             }
+        } else if (connection === 'open') {
+            console.log(`🟢 ${BOT_NAME} Successfully Connected to WhatsApp!`);
         }
     });
 
-    // B. MESSAGES DISPATCHER
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages;
-        if (!msg || !msg.key) return;
+    // Core Message Listening & Unified Command Core Handler
+    sock.ev.on('messages.upsert', async (chatUpdate) => {
+        try {
+            const msg = chatUpdate.messages[0];
+            if (!msg.message || msg.key.fromMe) return;
 
-        const from = msg.key.remoteJid;
-        if (from === 'status@broadcast') {
-            await sock.readMessages([msg.key]);
-            await sock.sendMessage(from, { react: { text: '👑', key: msg.key } }, { statusJidList: [msg.key.participant] });
-            return;
-        }
+            const chatId = msg.key.remoteJid;
+            const isGroup = chatId.endsWith('@g.us');
+            
+            // Extract textual contents across text, captions, and links
+            const messageText = msg.message.conversation || 
+                                msg.message.extendedTextMessage?.text || 
+                                msg.message.imageMessage?.caption || 
+                                msg.message.videoMessage?.caption || "";
+            
+            // Safe exit if prefix criteria isn't met
+            if (!messageText.startsWith(PREFIX)) return;
 
-        if (msg.key.fromMe) return;
+            // Parsing structures splits terms and isolate variables
+            const args = messageText.slice(PREFIX.length).trim().split(/ +/);
+            const command = args.shift().toLowerCase();
+            const sender = msg.key.participant || msg.key.remoteJid;
 
-        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || "";
-        const isGroup = from.endsWith('@g.us');
+            // Fetch structural data fields for Group Admin Checkers
+            let groupMetadata = isGroup ? await sock.groupMetadata(chatId) : null;
+            let groupAdmins = isGroup ? groupMetadata.participants.filter(p => p.admin).map(p => p.id) : [];
+            let isBotAdmin = isGroup ? groupAdmins.includes(sock.user.id.split(':')[0] + '@s.whatsapp.net') : false;
+            let isSenderAdmin = isGroup ? groupAdmins.includes(sender) : false;
 
-        const userSettings = await pool.query('SELECT * FROM bot_users WHERE phone = $1', [phone]);
-        const antiLinkActive = userSettings.rows?.antilink_enabled !== false;
+            // Execute Actions via System Command Router Switch
+            switch (command) {
+                
+                case "menu":
+                case "help":
+                    const menuText = `👑 *${BOT_NAME} COMMAND MENU* 🤴\n\n` +
+                        `*Prefix:* [ ${PREFIX} ]\n\n` +
+                        `⚙️ *SYSTEM COMMANDS*\n` +
+                        `▫️ \`${PREFIX}ping\` - Check latency metrics.\n` +
+                        `▫️ \`${PREFIX}runtime\` - View bot online uptime.\n\n` +
+                        `👥 *GROUP ADMIN TOOLS*\n` +
+                        `▫️ \`${PREFIX}groupinfo\` - Display group parameters.\n` +
+                        `▫️ \`${PREFIX}kick @user\` - Expel a user from chat.\n` +
+                        `▫️ \`${PREFIX}tagall\` - Tag all chat members.\n` +
+                        `▫️ \`${PREFIX}link\` - Retrieve group invite link.\n\n` +
+                        `🎨 *CONVERTERS*\n` +
+                        `▫️ \`${PREFIX}sticker\` (or \`${PREFIX}s\`) - Media to sticker.\n\n` +
+                        `🧠 *UTILITIES & SEARCH*\n` +
+                        `▫️ \`${PREFIX}weather [city]\` - Get climate reports.\n\n` +
+                        `_*KING BM PRO © 2026 | Developed by Killer Bm*_`;
+                    
+                    await sock.sendMessage(chatId, { text: menuText }, { quoted: msg });
+                    break;
 
-        if (isGroup && antiLinkActive) {
-            const hasLink = text.includes('://whatsapp.com') || text.includes('http://') || text.includes('https://');
-            if (hasLink) {
-                const groupMetadata = await sock.groupMetadata(from);
-                const botJid = sock.user.id.split(':') + '@s.whatsapp.net';
-                const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid)?.admin;
-                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
+                case "ping":
+                    const startTime = Date.now();
+                    await sock.sendMessage(chatId, { text: "⏳ Analyzing connection node..." }, { quoted: msg });
+                    const latency = Date.now() - startTime;
+                    await sock.sendMessage(chatId, { text: `🤖 *Pong!* Response Latency: *${latency}ms*` }, { quoted: msg });
+                    break;
 
-                if (isBotAdmin && !isSenderAdmin) {
-                    await sock.sendMessage(from, { delete: msg.key });
-                    await sock.sendMessage(from, { text: `⚠️ *Links are blocked!* User @${msg.key.participant.split('@')} has been removed.`, mentions: [msg.key.participant] });
-                    await sock.groupParticipantsUpdate(from, [msg.key.participant], 'remove');
-                    return;
-                }
-            }
-        }
+                case "runtime":
+                    const uptime = process.uptime();
+                    const hours = Math.floor(uptime / 3600);
+                    const minutes = Math.floor((uptime % 3600) / 60);
+                    const seconds = Math.floor(uptime % 60);
+                    await sock.sendMessage(chatId, { text: `⏳ *Uptime:* ${hours}h ${minutes}m ${seconds}s` }, { quoted: msg });
+                    break;
 
-        const cleanText = text.toLowerCase().trim();
-        if (cleanText === 'hello' || cleanText === 'hi' || cleanText === 'mambo') {
-            await sock.sendMessage(from, { text: '👋 Habari! I am *KING 🤴 BM*. Type `.menu` to see my available control commands!' }, { quoted: msg });
-        }
+                case "groupinfo":
+                    if (!isGroup) return sock.sendMessage(chatId, { text: "❌ This command is restricted to group chats only." });
+                    const infoText = `📊 *GROUP METRICS*\n\n` +
+                        `📝 *Subject:* ${groupMetadata.subject}\n` +
+                        `🆔 *ID:* ${groupMetadata.id}\n` +
+                        `👥 *Total Participants:* ${groupMetadata.participants.length}\n` +
+                        `👑 *Admins Total:* ${groupAdmins.length}`;
+                    await sock.sendMessage(chatId, { text: infoText }, { quoted: msg });
+                    break;
 
-        if (text.startsWith('.')) {
-            const parts = text.slice(1).trim().split(' ');
-            const command = parts.toLowerCase();
-            const args = parts.slice(1).join(' ');
+                case "kick":
+                    if (!isGroup) return sock.sendMessage(chatId, { text: "❌ This command only works in group environments." });
+                    if (!isBotAdmin) return sock.sendMessage(chatId, { text: "❌ Elevation required: Make the bot an admin." });
+                    if (!isSenderAdmin) return sock.sendMessage(chatId, { text: "❌ Execution denied: Only Admins can invoke kick actions." });
 
-            if (command === 'menu' || command === 'help') {
-                const menu = `👑 *KING 🤴 BM CONTROL SYSTEM* 👑\n\n` +
-                             `⚙️ *Toggles:*\n` +
-                             `• Antilink: ${antiLinkActive ? '✅ ON' : '❌ OFF'} (\`.antilink on/off\`)\n` +
-                             `• Welcome Msg: ${userSettings.rows?.welcome_enabled !== false ? '✅ ON' : '❌ OFF'} (\`.welcome on/off\`)\n\n` +
-                             `🛠 *Moderation & Media Commands:*\n` +
-                             `👉 \`.ping\` - Check latency delay.\n` +
-                             `👉 \`.groupinfo\` - Output chat metadata.\n` +
-                             `👉 \`.kick @user\` - Expel group target member.\n` +
-                             `👉 \`.promote @user\` - Grant admin controls.\n` +
-                             `👉 \`.play song name\` - Stream search audio.\n` +
-                             `👉 \`.video video name\` - Download search video.\n` +
-                             `👉 \`.sticker\` - Convert sent image to sticker.`;
-                await sock.sendMessage(from, { text: menu });
-            }
+                    let userToKick = msg.message.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                    if (!userToKick && msg.message.extendedTextMessage?.contextInfo?.quotedMessage) {
+                        userToKick = msg.message.extendedTextMessage.contextInfo.participant;
+                    }
+                    if (!userToKick && args[0]) {
+                        userToKick = args[0].replace(/[^0-9]/g, '') + "@s.whatsapp.net";
+                    }
 
-            if (command === 'ping') {
-                await sock.sendMessage(from, { text: '👑 *KING 🤴 BM* is responding with zero lag metrics!' });
-            }
+                    if (!userToKick) return sock.sendMessage(chatId, { text: "👉 Mention, tag, or reply to a participant to expel them." });
 
-            if (command === 'groupinfo' && isGroup) {
-                const metadata = await sock.groupMetadata(from);
-                await sock.sendMessage(from, { text: `📋 *Group:* ${metadata.subject}\n👥 *Total Members:* ${metadata.participants.length}` });
-            }
+                    await sock.groupParticipantsUpdate(chatId, [userToKick], "remove");
+                    await sock.sendMessage(chatId, { text: "✅ Target user removed successfully." }, { quoted: msg });
+                    break;
 
-            if ((command === 'antilink' || command === 'welcome') && isGroup) {
-                const groupMetadata = await sock.groupMetadata(from);
-                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
-                if (!isSenderAdmin) return await sock.sendMessage(from, { text: "❌ This action requires Group Admin permissions." });
+                case "tagall":
+                    if (!isGroup) return;
+                    if (!isSenderAdmin) return sock.sendMessage(chatId, { text: "❌ Admin privileges required." });
 
-                const field = command === 'antilink' ? 'antilink_enabled' : 'welcome_enabled';
-                const value = args.toLowerCase() === 'on';
+                    let participants = groupMetadata.participants.map(p => p.id);
+                    let tagMessage = `📢 *Attention Everyone!*\n\n*Message:* ${args.join(" ") || "No notice broadcasted."}\n\n`;
+                    for (let mem of participants) {
+                        tagMessage += `👤 @${mem.split("@")[0]}\n`;
+                    }
+                    await sock.sendMessage(chatId, { text: tagMessage, mentions: participants });
+                    break;
 
-                await pool.query(
-                    `INSERT INTO bot_users (phone, ${field}) VALUES ($1, $2) ON CONFLICT (phone) DO UPDATE SET ${field} = $2`,
-                    [phone, value]
-                );
-                await sock.sendMessage(from, { text: `🎯 Feature \`.${command}\` set to: *${value ? 'ENABLED' : 'DISABLED'}*` });
-            }
+                case "link":
+                case "invite":
+                    if (!isGroup) return;
+                    if (!isBotAdmin) return sock.sendMessage(chatId, { text: "❌ Bot administrative access is required to read links." });
+                    const inviteCode = await sock.groupInviteCode(chatId);
+                    await sock.sendMessage(chatId, { text: `🔗 *Group Invite Link:* https://whatsapp.com{inviteCode}` }, { quoted: msg });
+                    break;
 
-            if (command === 'kick' && isGroup) {
-                const groupMetadata = await sock.groupMetadata(from);
-                const botJid = sock.user.id.split(':') + '@s.whatsapp.net';
-                const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid)?.admin;
-                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
+                case "weather":
+                    if (args.length === 0) return sock.sendMessage(chatId, { text: "🔍 Specify target city: Ex: `.weather Nairobi`" });
+                    try {
+                        const city = args.join(" ");
+                        const res = await axios.get(`https://wttr.in{city}?format=3`);
+                        await sock.sendMessage(chatId, { text: `🌤 *Weather Metrics:* ${res.data.trim()}` }, { quoted: msg });
+                    } catch {
+                        await sock.sendMessage(chatId, { text: "❌ Target location unrecognized or communication timeout." });
+                    }
+                    break;
 
-                if (!isSenderAdmin) return await sock.sendMessage(from, { text: "❌ This requires Group Admin permissions." });
-                if (!isBotAdmin) return await sock.sendMessage(from, { text: "❌ Make me an admin first to allow removing members." });
+                case "sticker":
+                case "s":
+                    // Isolating media variables from original or replied message frames
+                    const isMessageImage = msg.message.imageMessage;
+                    const isMessageVideo = msg.message.videoMessage;
+                    const isQuotedImage = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+                    const isQuotedVideo = msg.message.extendedTextMessage?.contextInfo?.quotedMessage?.videoMessage;
 
-                let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?. || (args && args.replace(/[^0-9]/g, '') + '@s.whatsapp.net');
-                if (!target || target === '@s.whatsapp.net') return await sock.sendMessage(from, { text: "🎯 Tag the user or type their phone number. Example: \`.kick @user\`" });
+                    if (!isMessageImage && !isMessageVideo && !isQuotedImage && !isQuotedVideo) {
+                        return sock.sendMessage(chatId, { text: "📷 Tag or send an image or brief video clip using `.sticker`" });
 
-                await sock.groupParticipantsUpdate(from, [target], 'remove');
-                await sock.sendMessage(from, { text: `🚀 Target user successfully removed.` });
-            }
-
-            if (command === 'promote' && isGroup) {
-                const groupMetadata = await sock.groupMetadata(from);
-                const botJid = sock.user.id.split(':') + '@s.whatsapp.net';
-                const isBotAdmin = groupMetadata.participants.find(p => p.id === botJid)?.admin;
-                const isSenderAdmin = groupMetadata.participants.find(p => p.id === msg.key.participant)?.admin;
-
-                if (!isSenderAdmin) return await sock.sendMessage(from, { text: "❌ This action requires Group Admin privileges." });
-                if (!isBotAdmin) return await sock.sendMessage(from, { text: "❌ Make me an admin first to promote users." });
-
-                let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?. || (args && args.replace(/[^0-9]/g, '') + '@s.whatsapp.net');
-                if (!target || target === '@s.whatsapp.net') return await sock.sendMessage(from, { text: "🎯 Tag the user you want to promote. Example: \`.promote @user\`" });
-
-                await sock.groupParticipantsUpdate(from, [target], 'promote');

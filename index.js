@@ -52,7 +52,7 @@ _*POWERED BY KILLERBM8-SVG*_`;
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL TELEGRAM CHANNEL LINK
-                    { text: '📢 TELEGRAM CHANNEL', url: '' }
+                    { text: '📢 TELEGRAM CHANNEL', url: 'https://t.me/+3GVymuRshyw1ZDQ0' }
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL WHATSAPP CHANNEL LINK
@@ -60,7 +60,7 @@ _*POWERED BY KILLERBM8-SVG*_`;
                 ],
                 [
                     // Links back to your GitHub repository
-                    { text: '💻 REPOSITORY', url: 'https://github.com' }
+                    { text: '💻 REPOSITORY', url: 'https://github.com/killerbm8-svg/KING-BM-/tree/main' }
                 ]
             ]
         }

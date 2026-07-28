@@ -1,20 +1,15 @@
 {
-  "name": "king-bm",
+  "name": "king-bm-bot",
   "version": "1.0.0",
-  "description": "WhatsApp public multi-session platform dashboard",
+  "description": "Multi-device WhatsApp Bot with Telegram Pairing Menu",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.6.0",
-    "express": "^4.19.2",
-    "pino": "^9.1.0",
-    "qrcode": "^1.5.3",
-    "link-preview-js": "^3.0.4"
-  },
-  "engines": {
-    "node": "20.x"
+    "pino": "^8.19.0",
+    "node-telegram-bot-api": "^0.65.1",
+    "qrcode": "^1.5.3"
   }
 }

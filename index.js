@@ -1,22 +1,23 @@
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const TelegramBot = require('node-telegram-bot-api');
 const pino = require('pino');
+const fs = require('fs');
 
 // Read directly from the cloud environment configuration panel
 const tgToken = process.env.TELEGRAM_BOT_TOKEN;
-const botName = process.env.BOT_NAME || "KING-BM-";
+const botName = process.env.BOT_NAME || "KING 👑 BM";
 const prefix = process.env.PREFIX || "/";
 
 if (!tgToken) {
-    console.error("❌ ERROR: TELEGRAM_BOT_TOKEN is missing! Please add it to your hosting platform's Environment Variables settings.");
+    console.error("❌ ERROR: TELEGRAM_BOT_TOKEN is missing!");
     process.exit(1);
 }
 
-// 1. Initialize Telegram Menu Interface Handler
+// Initialize Telegram Handler
 const tgBot = new TelegramBot(tgToken, { polling: true });
 console.log(`🤖 Telegram Interface active for ${botName}`);
 
-// Handle the /start command to display the exact styled layout seen in your screenshot
+// --- MENU /START COMMAND ---
 tgBot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const welcomeMenu = `
@@ -28,12 +29,16 @@ tgBot.onText(/\/start/, (msg) => {
 🟢 *STATUS*     ::  ONLINE ✅
 🌐 *PLATFORM*   ::  TELEGRAM / WHATSAPP
 🔑 *PREFIX*     ::  \`${prefix}\`
+
 ────────────────────────────
 ⚔️  *BOT SYSTEM COMMANDS*  ⚔️
 ────────────────────────────
 ♦️ \`/connect\`  ➤ Pair your device link code
 ♦️ \`/delpair\`  ➤ Remove paired session keys
 ♦️ \`/listpair\` ➤ View active multi-device pairs
+
+🔻 *JOIN OUR CHANNELS BELOW* 🔻
+Please subscribe to stay updated with code updates and support!
 
 _*POWERED BY KILLERBM8-SVG*_`;
 
@@ -42,7 +47,19 @@ _*POWERED BY KILLERBM8-SVG*_`;
         reply_markup: {
             inline_keyboard: [
                 [
-                    { text: '👥 SUPPORT GROUP', url: 'https://t.me' },
+                    // ⚠️ REPLACE WITH YOUR REAL WHATSAPP GROUP LINK
+                    { text: '👥 WHATSAPP SUPPORT GROUP', url: 'https://chat.whatsapp.com/HFkhRciXPv60qkmcKGIX3w?s=cl&p=a&mlu=0&ilr=0&amv=1' }
+                ],
+                [
+                    // ⚠️ REPLACE WITH YOUR REAL TELEGRAM CHANNEL LINK
+                    { text: '📢 TELEGRAM CHANNEL', url: '' }
+                ],
+                [
+                    // ⚠️ REPLACE WITH YOUR REAL WHATSAPP CHANNEL LINK
+                    { text: '🟢 WHATSAPP CHANNEL', url: 'https://whatsapp.com/channel/0029VbChWLcCRs1nIoOoyk2T' }
+                ],
+                [
+                    // Links back to your GitHub repository
                     { text: '💻 REPOSITORY', url: 'https://github.com' }
                 ]
             ]
@@ -51,7 +68,7 @@ _*POWERED BY KILLERBM8-SVG*_`;
     tgBot.sendMessage(chatId, welcomeMenu, options);
 });
 
-// Handle the pairing requests workflow 
+// --- CONNECT COMMAND ---
 tgBot.onText(/\/connect/, async (msg) => {
     const chatId = msg.chat.id;
     tgBot.sendMessage(chatId, "⏳ _Generating pairing instance... Please reply with your phone number with country code (e.g. 2348012345678)._", { parse_mode: 'Markdown' });
@@ -67,7 +84,6 @@ tgBot.onText(/\/connect/, async (msg) => {
         try {
             tgBot.sendMessage(chatId, `🔁 _Requesting pairing code from WhatsApp servers for +${rawNumber}..._`, { parse_mode: 'Markdown' });
             
-            // Initialize Baileys Multi-Device Engine
             const { state, saveCreds } = await useMultiFileAuthState(`sessions/${chatId}`);
             const sock = makeWASocket({
                 auth: state,
@@ -94,3 +110,29 @@ tgBot.onText(/\/connect/, async (msg) => {
         }
     });
 });
+
+// --- LISTPAIR COMMAND ---
+tgBot.onText(/\/listpair/, (msg) => {
+    const chatId = msg.chat.id;
+    const sessionPath = `sessions/${chatId}`;
+
+    if (fs.existsSync(sessionPath) && fs.readdirSync(sessionPath).length > 0) {
+        tgBot.sendMessage(chatId, `📱 *ACTIVE PAIRS* 📱\n\nYou currently have an active session instance connected on this account.\n\nTo reset or clear your connection, type \`/delpair\`.`, { parse_mode: 'Markdown' });
+    } else {
+        tgBot.sendMessage(chatId, `🚫 *NO ACTIVE PAIRS* 🚫\n\nYou don't have any saved multi-device session files. Type \`/connect\` to pair your WhatsApp now.`, { parse_mode: 'Markdown' });
+    }
+});
+
+// --- DELPAIR COMMAND ---
+tgBot.onText(/\/delpair/, (msg) => {
+    const chatId = msg.chat.id;
+    const sessionPath = `sessions/${chatId}`;
+
+    if (fs.existsSync(sessionPath)) {
+        fs.rmSync(sessionPath, { recursive: true, force: true });
+        tgBot.sendMessage(chatId, `🗑️ *SESSION DELETED* 🗑️\n\nYour active pairing files have been wiped successfully. Your WhatsApp session is now disconnected.`, { parse_mode: 'Markdown' });
+    } else {
+        tgBot.sendMessage(chatId, `❌ No active session data found to delete.`, { parse_mode: 'Markdown' });
+    }
+});
+

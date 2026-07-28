@@ -48,19 +48,19 @@ _*POWERED BY KILLERBM8-SVG*_`;
             inline_keyboard: [
                 [
                     // ⚠️ REPLACE WITH YOUR REAL WHATSAPP GROUP LINK
-                    { text: '👥 WHATSAPP SUPPORT GROUP', url: 'https://whatsapp.com' }
+                    { text: '👥 WHATSAPP SUPPORT GROUP', url: 'https://chat.whatsapp.com/HFkhRciXPv60qkmcKGIX3w?s=cl&p=a&mlu=0&ilr=0&amv=1' }
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL TELEGRAM CHANNEL LINK
-                    { text: '📢 TELEGRAM CHANNEL', url: 'https://t.me' }
+                    { text: '📢 TELEGRAM CHANNEL', url: 'https://t.me/+3GVymuRshyw1ZDQ0' }
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL WHATSAPP CHANNEL LINK
-                    { text: '🟢 WHATSAPP CHANNEL', url: 'https://whatsapp.com' }
+                    { text: '🟢 WHATSAPP CHANNEL', url: 'https://whatsapp.com/channel/0029VbChWLcCRs1nIoOoyk2T' }
                 ],
                 [
                     // Links back to your GitHub repository
-                    { text: '💻 REPOSITORY', url: 'https://github.com' }
+                    { text: '💻 REPOSITORY', url: 'https://github.com/killerbm8-svg/KING-BM-/tree/main' }
                 ]
             ]
         }

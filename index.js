@@ -48,19 +48,19 @@ _*POWERED BY KILLERBM8-SVG*_`;
             inline_keyboard: [
                 [
                     // ⚠️ REPLACE WITH YOUR REAL WHATSAPP GROUP LINK
-                    { text: '👥 WHATSAPP SUPPORT GROUP', url: 'https://chat.whatsapp.com/HFkhRciXPv60qkmcKGIX3w?s=cl&p=a&mlu=0&ilr=0&amv=1' }
+                    { text: '👥 WHATSAPP SUPPORT GROUP', url: 'https://whatsapp.com' }
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL TELEGRAM CHANNEL LINK
-                    { text: '📢 TELEGRAM CHANNEL', url: 'https://t.me/+3GVymuRshyw1ZDQ0' }
+                    { text: '📢 TELEGRAM CHANNEL', url: 'https://t.me' }
                 ],
                 [
                     // ⚠️ REPLACE WITH YOUR REAL WHATSAPP CHANNEL LINK
-                    { text: '🟢 WHATSAPP CHANNEL', url: 'https://whatsapp.com/channel/0029VbChWLcCRs1nIoOoyk2T' }
+                    { text: '🟢 WHATSAPP CHANNEL', url: 'https://whatsapp.com' }
                 ],
                 [
                     // Links back to your GitHub repository
-                    { text: '💻 REPOSITORY', url: 'https://github.com/killerbm8-svg/KING-BM-/tree/main' }
+                    { text: '💻 REPOSITORY', url: 'https://github.com' }
                 ]
             ]
         }
@@ -85,25 +85,35 @@ tgBot.onText(/\/connect/, async (msg) => {
             tgBot.sendMessage(chatId, `🔁 _Requesting pairing code from WhatsApp servers for +${rawNumber}..._`, { parse_mode: 'Markdown' });
             
             const { state, saveCreds } = await useMultiFileAuthState(`sessions/${chatId}`);
+            
+            // FIXED: Added browser arrays to prevent immediate Connection Closed errors
             const sock = makeWASocket({
                 auth: state,
                 logger: pino({ level: 'silent' }),
-                printQRInTerminal: false
+                printQRInTerminal: false,
+                browser: ["Ubuntu", "Chrome", "20.0.04"]
             });
 
             sock.ev.on('creds.update', saveCreds);
+
+            sock.ev.on('connection.update', async (update) => {
+                const { connection } = update;
+                if (connection === 'close') {
+                    console.log('Connection dropped, retrying handshake...');
+                }
+            });
 
             setTimeout(async () => {
                 try {
                     let code = await sock.requestPairingCode(rawNumber); 
                     code = code?.match(/.{1,4}/g)?.join('-') || code; 
                     
-                    const responseText = `✨ *PAIRING REPLICA INSTANCE* ✨\n\nYour deployment multi-device verification token is:\n\`${code}\`\n\n*Instructions:*\n1. Open WhatsApp on your phone.\n2. Tap *Linked Devices* ➜ *Link a Device*.\n3. Choose *Link with phone number instead*.\n4. Input the code displayed above.`;
+                    const responseText = `✨ *PAIRING SUCCESSFUL* ✨\n\nYour deployment multi-device verification token is:\n\`${code}\`\n\n*Instructions:*\n1. Open WhatsApp on your phone.\n2. Tap *Linked Devices* ➜ *Link a Device*.\n3. Choose *Link with phone number instead*.\n4. Input the code displayed above.`;
                     tgBot.sendMessage(chatId, responseText, { parse_mode: 'Markdown' });
                 } catch (err) {
-                    tgBot.sendMessage(chatId, `❌ Code requests closed: ${err.message}`);
+                    tgBot.sendMessage(chatId, `❌ Code requests closed: ${err.message}. Please try typing /connect again.`);
                 }
-            }, 3000);
+            }, 5000); // 5-second buffer to guarantee connection synchronization stability
 
         } catch (error) {
             tgBot.sendMessage(chatId, `❌ Failed to initialize pairing instance: ${error.message}`);
@@ -135,4 +145,3 @@ tgBot.onText(/\/delpair/, (msg) => {
         tgBot.sendMessage(chatId, `❌ No active session data found to delete.`, { parse_mode: 'Markdown' });
     }
 });
-
